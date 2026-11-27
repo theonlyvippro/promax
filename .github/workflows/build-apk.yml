@@ -1,39 +1,57 @@
 name: Build Android APK
-
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Gradle Wrapper if missing
-        run: |
-          if [ ! -f "./gradlew" ]; then
-            gradle wrapper --gradle-version 8.7 --distribution-type bin
-          fi
-          chmod +x gradlew
-
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: TheOnlyVIP-ProMax-Debug-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+​on:
+push:
+branches: [ "main" ]
+workflow_dispatch:
+​jobs:
+build:
+runs-on: ubuntu-latest
+​steps:
+- name: Checkout code
+uses: actions/checkout@v4
+​- name: Set up JDK 17
+uses: actions/setup-java@v4
+with:
+java-version: '17'
+distribution: 'temurin'
+​- name: Setup Android SDK & Command Line Tools
+run: |
+set -e
+ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+export ANDROID_SDK_ROOT ANDROID_HOME="$ANDROID_SDK_ROOT"
+mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools"
+​if [ ! -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+CMDLINE_ZIP="/tmp/commandlinetools-linux.zip"
+curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o "$CMDLINE_ZIP"
+rm -rf "$ANDROID_SDK_ROOT/cmdline-tools/temp-extract"
+mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/temp-extract"
+unzip -q "$CMDLINE_ZIP" -d "$ANDROID_SDK_ROOT/cmdline-tools/temp-extract"
+rm -rf "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+if [ -d "$ANDROID_SDK_ROOT/cmdline-tools/temp-extract/cmdline-tools" ]; then
+mv "$ANDROID_SDK_ROOT/cmdline-tools/temp-extract/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+else
+mv "$ANDROID_SDK_ROOT/cmdline-tools/temp-extract" "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+fi
+rm -rf "$ANDROID_SDK_ROOT/cmdline-tools/temp-extract" "$CMDLINE_ZIP"
+fi
+​yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
+"$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" 
+"platform-tools" 
+"platforms;android-34" 
+"build-tools;34.0.0"
+​echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+​- name: Setup Gradle Wrapper if missing
+run: |
+if [ ! -f "./gradlew" ]; then
+gradle wrapper --gradle-version 8.7 --distribution-type bin
+fi
+chmod +x gradlew
+​- name: Build Debug APK
+run: ./gradlew assembleDebug
+​- name: Upload APK Artifact
+uses: actions/upload-artifact@v4
+with:
+name: TheOnlyVIP-ProMax-Debug-APK
+path: app/build/outputs/apk/debug/app-debug.apk
